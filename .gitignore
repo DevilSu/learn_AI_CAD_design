@@ -1,0 +1,15 @@
+# Python virtual environments & caches
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+
+# Sliced G-code & temporary 3D exports / renders
+*.gcode
+*.bgcode
+*.bak
+
+# OS & editor artifacts
+.DS_Store
+*.swp
