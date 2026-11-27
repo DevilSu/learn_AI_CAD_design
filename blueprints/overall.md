@@ -1,4 +1,4 @@
-# <span style="color: #88C0D0;">**Simplified Headless AI 3D-Printing CAD Plan**</span>
+# <span style="color: #88C0D0;">**In-Chat Headless AI 3D-Printing CAD Plan**</span>
 
 ### <span style="color: #81A1C1;">**Filename:** `overall.md`</span>
 
@@ -6,65 +6,84 @@
 | :--- | :--- |
 | <span style="color: #EBCB8B;">**Author**</span> | devilsu |
 | <span style="color: #EBCB8B;">**Created**</span> | 2026-11-20 PST |
-| <span style="color: #EBCB8B;">**Modified**</span> | 2026-11-21 PST |
-| <span style="color: #EBCB8B;">**Version**</span> | v3.0.0 |
-| <span style="color: #EBCB8B;">**Host / Mode**</span> | `Ubuntu 26.04.1 LTS` / `Python 3.14.4` (100% Headless Remote-SSH via Antigravity) |
-| <span style="color: #EBCB8B;">**Scope**</span> | Simple Progressive 3D Printing (`RPi Enclosure` -> `Reference Drawings` -> `Gears & Screws Later`) |
+| <span style="color: #EBCB8B;">**Modified**</span> | 2026-11-27 PST |
+| <span style="color: #EBCB8B;">**Version**</span> | v4.0.0 |
+| <span style="color: #EBCB8B;">**Host / Mode**</span> | `Ubuntu 26.04.1 LTS` / `Python 3.14.4` (100% Headless — Antigravity Desktop & Remote Control) |
+| <span style="color: #EBCB8B;">**Desired UX**</span> | Prompt in Chat -> Rotate/Zoom 3D Right Inside Chat -> Prompt Tweaks -> Export `.3mf`/`.step` (Never Open CAD GUI) |
 | <span style="color: #EBCB8B;">**Reference Template**</span> | [`learn_AI_PCB_design`](https://github.com/DevilSu/learn_AI_PCB_design) |
 | <span style="color: #EBCB8B;">**Supporting Research**</span> | [8-Tool CAD Survey](research/cad_software_landscape_3dp.md) / [CAD MCP Analysis](research/cad_mcp_pros_cons_concerns.md) / [Project Diary](diary.md) |
-| <span style="color: #EBCB8B;">**Status**</span> | <span style="color: #A3BE8C;">**Simplified v3.0.0 — Ready for Stage 1 When Requested**</span> |
+| <span style="color: #EBCB8B;">**Status**</span> | <span style="color: #A3BE8C;">**Locked v4.0.0 — Executing Phase 1 (`toolchain_setup`)**</span> |
 
 ---
 
 ## <span style="color: #88C0D0;">**Table of Contents**</span>
-- [<span style="color: #88C0D0;">**1. Lean Headless Toolchain**</span>](#1-lean-headless-toolchain)
-  - [<span style="color: #81A1C1;">1.1 Base Stack and Why Gear Libraries Wait Until Stage 4</span>](#11-base-stack-and-why-gear-libraries-wait-until-stage-4)
-  - [<span style="color: #81A1C1;">1.2 Lean Base Stack Breakdown</span>](#12-lean-base-stack-breakdown)
-- [<span style="color: #88C0D0;">**2. Simple Four-Step Per-Part Workflow**</span>](#2-simple-four-step-per-part-workflow)
+- [<span style="color: #88C0D0;">**1. Single-Engine Headless Architecture**</span>](#1-single-engine-headless-architecture)
+  - [<span style="color: #81A1C1;">1.1 Why Pure build123d Plus In-Chat 3D Viewer</span>](#11-why-pure-build123d-plus-in-chat-3d-viewer)
+  - [<span style="color: #81A1C1;">1.2 Zero-Sudo Python Toolchain Breakdown</span>](#12-zero-sudo-python-toolchain-breakdown)
+- [<span style="color: #88C0D0;">**2. In-Chat Interactive 3D Loop**</span>](#2-in-chat-interactive-3d-loop)
+  - [<span style="color: #81A1C1;">2.1 Prompt-to-3D Dataflow</span>](#21-prompt-to-3d-dataflow)
+  - [<span style="color: #81A1C1;">2.2 Phase A Inline Embed vs Phase B MCP App Upgrade</span>](#22-phase-a-inline-embed-vs-phase-b-mcp-app-upgrade)
 - [<span style="color: #88C0D0;">**3. Progressive Subproject Roadmap**</span>](#3-progressive-subproject-roadmap)
   - [<span style="color: #81A1C1;">3.1 Multi-Stage Progression</span>](#31-multi-stage-progression)
   - [<span style="color: #81A1C1;">3.2 Subproject Scope Breakdown</span>](#32-subproject-scope-breakdown)
-- [<span style="color: #88C0D0;">**4. Target Repository Layout**</span>](#4-target-repository-layout)
+- [<span style="color: #88C0D0;">**4. Tripartite Repository Layout**</span>](#4-tripartite-repository-layout)
 
 ---
 
-## <span style="color: #88C0D0;">**1. Lean Headless Toolchain**</span>
+## <span style="color: #88C0D0;">**1. Single-Engine Headless Architecture**</span>
 
-### <span style="color: #81A1C1;">**1.1 Base Stack and Why Gear Libraries Wait Until Stage 4**</span>
+### <span style="color: #81A1C1;">**1.1 Why Pure build123d Plus In-Chat 3D Viewer**</span>
 
-To keep setup fast and uncluttered, we strip out upfront gear/thread libraries (`py-gearworks`, `bd-warehouse`), extra render wrappers, and all FEA/CNC bloat. We start with <span style="color: #EBCB8B;">**only what is required to model headlessly, spin 3D parts inside Antigravity over Remote-SSH, and verify 3D prints**</span>—adding gear and screw libraries only when we reach Stage 4:
+Because the target workflow is <span style="color: #EBCB8B;">**prompt in chat -> spin/zoom the 3D object right inside the chat -> prompt tweaks -> print (without ever opening external CAD software)**</span>, we drop `SolidCraft`, drop VS Code extensions (`o3dv-viewer` / `ocp-cad-viewer`), and drop all FEA/CNC bloat in favor of a single, zero-`sudo`, 100% Python headless stack:
 
-* <span style="color: #EBCB8B;">**Engine A — `SolidCraft` (`solidcraft-cli mcp --headless`):**</span> Pure-Rust headless MCP server with offscreen GPU screenshots, built-in enclosure features (`extrude`, `fillet`, `shell`, `plastic.lip`, `plastic.snap_fit`, mounting bosses/holes), `.step`/`.3mf` export, and native `.sc` files that retain an <span style="color: #EBCB8B;">**editable parametric feature timeline**</span> (reopenable anytime in a browser at `https://solidcraft.io/app`). *(Host check confirmed `solidcraft` is not on the Ubuntu Snap Store, so Stage 1 installs via GitHub release `.deb` `~203 MB` or portable `.tar.gz` `~199 MB`.)*
-* <span style="color: #EBCB8B;">**Engine B — Minimal `build123d` (`build123d` + `build123d-mcp`):**</span> Just two PyPI packages inside a `Python 3.14` `.venv` on OpenCASCADE 8.0 (`~245 MB`), providing rock-solid B-Rep fillets/booleans, scripted loops/math, `.step`/`.3mf` export, and ready drop-in support when Stage 4 adds `py-gearworks` and `bd-warehouse`.
-* <span style="color: #EBCB8B;">**In-Antigravity 3D Viewing (`nahueltaibo.o3dv-viewer`):**</span> Click any `.step` or `.3mf` output in Explorer to rotate, pan, zoom, toggle enclosure lid/base visibility, and auto-reload directly inside an Antigravity tab over Remote-SSH *(with `ocp-cad-viewer` optional later if live X/Y/Z section sliders are wanted)*.
-* <span style="color: #EBCB8B;">**Headless Printability Gate (`prusa-slicer 2.9.4` CLI):**</span> Validates watertight manifold topology, overhangs/supports, bed fit, and print time headlessly via `sudo apt install prusa-slicer`.
+* <span style="color: #EBCB8B;">**Single Headless B-Rep Engine (`build123d` on OpenCASCADE 8.0):**</span> Clean, deterministic Python `@dataclass` + `BuildPart` scripts (`extrude`, `revolve`, `fillet`, `chamfer`, `Mode.SUBTRACT`) that diff cleanly per chat prompt, export real `.3mf` (for slicing) + `.step` (exact CAD archive), and extend naturally to Stage 4 gears/screws (`py-gearworks` + `bd-warehouse`).
+* <span style="color: #EBCB8B;">**Native In-Chat Interactive 3D (`<agent-embed>` -> MCP App):**</span> Every build automatically outputs a CSP-safe, zero-CDN, single-file WebGL2 3D viewer (`sw/common/export_chat_3d.py`, with automatic Canvas2D fallback) rendered **inline inside the Antigravity chat response** (drag to rotate, scroll/`+`/`-` to zoom, `Iso`/`Top`/`Front`/`Side` presets, per-part show/hide, X-Ray, and live Z cross-section clipping slider). Works identically on Antigravity Desktop and **Antigravity Remote Control** from any browser.
+* <span style="color: #EBCB8B;">**Automated AI Self-Audit & 3D-Print DFM (Zero `sudo`):**</span> Because the AI agent inspects static images while you spin the interactive 3D widget, `sw/common/print_audit.py` + `sw/common/render_audit.py` automatically render headless multi-angle + cross-section PNGs for AI vision inspection and verify watertightness (`trimesh`/`manifold3d`), zero part collision (`intersect().volume == 0`), overhang angles (`> 45 deg`), bed fit, and filament mass in grams. *(Optional host add-on: `sudo apt install prusa-slicer` if CLI `.gcode` slicing is desired later.)*
 
-### <span style="color: #81A1C1;">**1.2 Lean Base Stack Breakdown**</span>
+### <span style="color: #81A1C1;">**1.2 Zero-Sudo Python Toolchain Breakdown**</span>
 
-| <span style="color: #EBCB8B;">**Component**</span> | <span style="color: #EBCB8B;">**Install Source**</span> | <span style="color: #EBCB8B;">**Purpose**</span> |
+| <span style="color: #EBCB8B;">**Component**</span> | <span style="color: #EBCB8B;">**Install Source**</span> | <span style="color: #EBCB8B;">**Role in Pipeline**</span> |
 | :--- | :--- | :--- |
-| <span style="color: #EBCB8B;">**`SolidCraft` (`solidcraft-cli mcp --headless`)**</span> | GitHub Release `.deb` (`~203 MB`) or `.tar.gz` (`~199 MB`) | Headless MCP CAD with editable `.sc` feature timelines, enclosure lips/snap-fits & `.step`/`.3mf` export |
-| <span style="color: #EBCB8B;">**`build123d` (`0.13.0`) + `build123d-mcp` (`0.3.91`)**</span> | `Python 3.14` `.venv` (`pip`) | Reliable OpenCASCADE B-Rep Python CAD + MCP; ready base for Stage 4 gear/screw packages |
-| <span style="color: #EBCB8B;">**`3D Model Viewer` (`nahueltaibo.o3dv-viewer`)**</span> | Antigravity IDE Extension | In-editor 3D orbit, pan, zoom, part-tree hiding & auto-reload for `.step`/`.3mf` |
-| <span style="color: #EBCB8B;">**`PrusaSlicer` (`2.9.4`) CLI**</span> | Ubuntu `apt` (`prusa-slicer`) | Headless `.3mf`/`.step` manifold, support & print-time verification |
+| <span style="color: #EBCB8B;">**`build123d` (`cadquery-ocp` 8.0)**</span> | `Python 3.14` `.venv` (`pip`) | Parametric B-Rep modeling, solid collision proofs, `.3mf` & `.step` export |
+| <span style="color: #EBCB8B;">**`trimesh` + `manifold3d`**</span> | `Python 3.14` `.venv` (`pip`) | Watertight manifold checks, overhang angle DFM audit, `.3mf`/`.stl` volume & filament grams |
+| <span style="color: #EBCB8B;">**`matplotlib` + `Pillow`**</span> | `Python 3.14` `.venv` (`pip`) | Headless multi-angle 3D + 2D cross-section PNG renders for AI visual self-check (zero `sudo`) |
+| <span style="color: #EBCB8B;">**`sw/common/export_chat_3d.py`**</span> | Repo Utility (`WebGL2` + `Canvas2D` fallback) | Zero-CDN offline single-file HTML 3D viewer embedded inline in chat via `<agent-embed>` |
+| <span style="color: #EBCB8B;">**Optional: `prusa-slicer` CLI**</span> | User Shell `sudo apt install prusa-slicer` | Optional final `.gcode` slice & print-time estimate |
 
 ---
 
-## <span style="color: #88C0D0;">**2. Simple Four-Step Per-Part Workflow**</span>
+## <span style="color: #88C0D0;">**2. In-Chat Interactive 3D Loop**</span>
+
+### <span style="color: #81A1C1;">**2.1 Prompt-to-3D Dataflow**</span>
 
 ```mermaid
 flowchart LR
-    S1["1. Dimensions & Clearance Spec"] -->
-    S2["2. Headless MCP Build<br/>(SolidCraft .sc or build123d .py)"] -->
-    S3["3. Inspect & Spin in Antigravity<br/>(o3dv-viewer Tab + Offscreen PNGs)"] -->
-    S4["4. Headless PrusaSlicer Check<br/>(Export .3mf + .step)"]
+    USER["You Prompt in Chat<br/>(Create / Tweak Dimensions)"] --> AGENT["Antigravity Agent<br/>(Edits Parametric build123d .py)"]
+    AGENT --> KERNEL["Headless build123d (.venv)<br/>(OpenCASCADE 8.0 B-Rep)"]
+
+    KERNEL -->|"Auto Self-Check"| AUDIT["Python Print DFM + PNG Views<br/>(Watertight, Overhangs & AI Vision)"]
+    AUDIT -->|"Fix Cutouts / Collisions"| AGENT
+
+    KERNEL -->|"Live Chat Preview"| EMBED["Interactive 3D Right in Chat<br/>(Phase A: HTML Embed / Phase B: MCP App)"]
+    EMBED -->|"Rotate, Zoom & Prompt Tweaks"| USER
+
+    KERNEL -->|"Ready to Print"| FAB["Export Release<br/>(.3mf + .step + Print Summary)"]
 ```
 
-Every part applies explicit 3D-print radial clearances ($c_{\text{clearance}}$, typically `0.15–0.25 mm` for board cutouts, `M2.5` screw holes, and lid snap-fits) rather than nominal CAD zero-fit dimensions:
+Every mating feature (board pocket, `M2.5`/`M3` screw holes, snap-fit lid lip) applies explicit 3D-print radial clearances ($c_{\text{clearance}}$, typically `0.15–0.25 mm`) rather than zero-clearance nominal geometry:
 
 $$
 D_{\text{print}} = D_{\text{nominal}} + 2 c_{\text{clearance}}
 $$
+
+### <span style="color: #81A1C1;">**2.2 Phase A Inline Embed vs Phase B MCP App Upgrade**</span>
+
+| <span style="color: #EBCB8B;">**Capability**</span> | <span style="color: #EBCB8B;">**Phase A: Inline `<agent-embed>` HTML (Stage 1)**</span> | <span style="color: #EBCB8B;">**Phase B: Antigravity CAD MCP App (Stage 4 Upgrade)**</span> |
+| :--- | :--- | :--- |
+| <span style="color: #EBCB8B;">**Setup**</span> | Zero plugins (`sw/common/export_chat_3d.py`) | Local plugin (`~/.gemini/config/plugins/cad-viewer/`) |
+| <span style="color: #EBCB8B;">**Display**</span> | Inline `<= 420px` WebGL2 canvas inside each chat bubble + 1-click Side Panel expand | Inline or persistent Side Panel (`aux_pane`) updating in place |
+| <span style="color: #EBCB8B;">**Best Mesh Size**</span> | Fast & clean for enclosures, brackets, and reference parts (`< 50k` triangles) | Streams dense Stage 4 gear/thread meshes via app-only `get_mesh` tool |
+| <span style="color: #EBCB8B;">**Interaction**</span> | Orbit, zoom, pan, `Iso`/`Top`/`Front`/`Side`, part toggles, X-Ray, Z slice slider | Adds click-to-attach selection/measurements back to next chat prompt |
 
 ---
 
@@ -78,41 +97,45 @@ graph LR
     classDef next fill:#88C0D0,stroke:#81A1C1,stroke-width:2px,color:#2E3440;
     classDef future fill:#3B4252,stroke:#4C566A,stroke-width:2px,color:#D8DEE9;
 
-    S0["Stage 0: Plan & Research<br/>Simplified Lean Stack"]:::done -->
-    S1["Stage 1: Lean Toolchain Setup<br/>SolidCraft + Minimal build123d"]:::next -->
+    S0["Stage 0: Plan & Research<br/>In-Chat 3D Workflow"]:::done -->
+    S1["Stage 1: Toolchain & Chat 3D Viewer<br/>build123d .venv + WebGL2 Embed"]:::next -->
     S2["Stage 2: Raspberry Pi Enclosure<br/>Case, Lid, Ports & Standoffs"]:::future -->
-    S3["Stage 3: 2D Reference Drawing to 3D<br/>Ortho Spec -> Parametric Solid"]:::future -->
-    S4["Stage 4: Gears, Screws & Mechanisms<br/>Add py-gearworks + bd-warehouse"]:::future
+    S3["Stage 3: 2D Reference Drawing to 3D<br/>Ortho Blueprint -> Parametric Solid"]:::future -->
+    S4["Stage 4: Gears, Screws & MCP App<br/>py-gearworks + Side-Pane Plugin"]:::future
 ```
 
 ### <span style="color: #81A1C1;">**3.2 Subproject Scope Breakdown**</span>
 
 | <span style="color: #EBCB8B;">**Stage**</span> | <span style="color: #EBCB8B;">**Subproject**</span> | <span style="color: #EBCB8B;">**Goal & Learning Focus**</span> | <span style="color: #EBCB8B;">**Status**</span> |
 | :---: | :--- | :--- | :---: |
-| <span style="color: #EBCB8B;">**Stage 0**</span> | **`plan_and_research`** | Ecosystem & MCP comparisons plus this simplified starting plan. | <span style="color: #A3BE8C;">**Completed**</span> |
-| <span style="color: #EBCB8B;">**Stage 1**</span> | **`toolchain_setup`** | Install `SolidCraft` CLI/MCP, minimal `.venv` (`build123d` + `build123d-mcp`), `prusa-slicer`, and `o3dv-viewer`; smoke-test an interactive box in Antigravity. | <span style="color: #88C0D0;">**Next (Deferred)**</span> |
-| <span style="color: #EBCB8B;">**Stage 2**</span> | **`rpi_enclosure`** | Simple 3D-printed Raspberry Pi case + lid (`M2.5` standoffs, USB/Ethernet/HDMI/USB-C cutouts, vent slots, rounded corners, lip/snap-fit)—testing `SolidCraft` vs. `build123d` head-to-head. | <span style="color: #4C566A;">**Planned**</span> |
-| <span style="color: #EBCB8B;">**Stage 3**</span> | **`reference_drawing_to_3d`** | Feed dimensioned 2D orthographic drawings/sketches to Antigravity, extract datums and cutouts, generate the parametric 3D part, and verify ortho overlays. | <span style="color: #4C566A;">**Planned**</span> |
-| <span style="color: #EBCB8B;">**Stage 4**</span> | **`gears_and_screws`** | Install `py-gearworks` + `bd-warehouse` here to build printable nuts/bolts, involute/planetary/worm gearsets with FDM `backlash`, and lead screws *(with KiCad PCB enclosures later)*. | <span style="color: #4C566A;">**Planned**</span> |
+| <span style="color: #EBCB8B;">**Stage 0**</span> | **`plan_and_research`** | Ecosystem & MCP comparisons plus this locked `v4.0.0` in-chat 3D plan. | <span style="color: #A3BE8C;">**Completed**</span> |
+| <span style="color: #EBCB8B;">**Stage 1**</span> | **`toolchain_setup`** | Scaffold tripartite repo (`RULE-REPO-001`), build `.venv` (`build123d`, `trimesh`, `manifold3d`, `matplotlib`, `Pillow`), create `export_chat_3d.py` + `print_audit.py` + `render_audit.py`, and run a live in-chat 3D smoke test. | <span style="color: #88C0D0;">**In Progress**</span> |
+| <span style="color: #EBCB8B;">**Stage 2**</span> | **`rpi_enclosure`** | Simple 3D-printed Raspberry Pi case + lid (`M2.5` standoffs, USB/Ethernet/HDMI/USB-C cutouts, vent slots, rounded corners, lip/snap-fit)—iterated purely via chat prompts + inline 3D spin. | <span style="color: #4C566A;">**Planned**</span> |
+| <span style="color: #EBCB8B;">**Stage 3**</span> | **`reference_drawing_to_3d`** | Feed dimensioned 2D orthographic drawings/sketches into chat, extract datums and cutouts, generate the parametric 3D solid, and inspect interactively in chat + ortho overlays. | <span style="color: #4C566A;">**Planned**</span> |
+| <span style="color: #EBCB8B;">**Stage 4**</span> | **`gears_and_screws`** | Add `py-gearworks` + `bd-warehouse` for printable nuts/bolts and involute/planetary/worm gears with FDM `backlash`, plus optional Phase B Antigravity CAD MCP App side-pane upgrade. | <span style="color: #4C566A;">**Planned**</span> |
 
 ---
 
-## <span style="color: #88C0D0;">**4. Target Repository Layout**</span>
+## <span style="color: #88C0D0;">**4. Tripartite Repository Layout**</span>
 
-*(Scaffolding for `hw/`, `sw/`, and stage subdirectories remains deferred until Stage 1 starts.)*
+Adhering strictly to `RULE-REPO-001`, `RULE-EVID-001`, and `RULE-DIARY-001`:
 
 ```text
 learn_AI_CAD_design/
 ├── readme.md                                       # Master project guide & roadmap dashboard
-├── .gitignore                                      # Python .venv, G-code & scratch mesh rules
+├── .gitignore                                      # Python .venv, G-code & scratch rules
 ├── blueprints/
-│   ├── overall.md                                  # Simplified v3.0.0 architecture plan
+│   ├── overall.md                                  # Locked v4.0.0 in-chat 3D architecture plan
 │   ├── diary.md                                    # Append-only daily engineering journal
 │   ├── research/                                   # 8-tool CAD landscape & MCP trade-off docs
-│   ├── toolchain_setup/                            # Stage 1 (Deferred)
-│   ├── rpi_enclosure/                              # Stage 2 (Deferred): Raspberry Pi case & lid
-│   ├── reference_drawing_to_3d/                    # Stage 3 (Deferred): 2D drawing -> 3D solid
-│   └── gears_and_screws/                           # Stage 4 (Deferred): Gears, threads & backlash
-├── hw/                                             # Future Scaffolding: .step & .3mf deliverables
-└── sw/                                             # Future Scaffolding: .venv, MCP & scripts
+│   ├── toolchain_setup/                            # Stage 1: phase_1.md + backup_evidences.md
+│   ├── rpi_enclosure/                              # Stage 2 (Planned): Raspberry Pi case & lid
+│   ├── reference_drawing_to_3d/                    # Stage 3 (Planned): 2D drawing -> 3D solid
+│   └── gears_and_screws/                           # Stage 4 (Planned): Gears, threads & MCP App
+├── hw/
+│   ├── common/                                     # Shared 3D-print tolerance profiles & board refs
+│   └── subprojects/                                # Isolated per-stage .3mf, .step & PNG exports
+└── sw/
+    ├── common/                                     # setup_env.sh, requirements.txt, export_chat_3d.py, print_audit.py
+    └── subprojects/                                # Isolated per-stage parametric build123d scripts & tests
 ```
